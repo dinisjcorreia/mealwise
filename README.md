@@ -1,4 +1,4 @@
-# Meal AI PWA
+# mealwise
 
 Photo-first calorie and water tracker built as a React PWA with Cloudflare Pages Functions, Supabase, and Gemini.
 

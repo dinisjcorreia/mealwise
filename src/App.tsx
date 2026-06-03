@@ -109,7 +109,7 @@ function AuthView() {
         <div className="brand-mark">
           <Sparkles size={22} />
         </div>
-        <h1>Meal AI</h1>
+        <h1>mealwise</h1>
         <p>Regista refeições por foto. Quando houver dúvida, pergunta antes de contar.</p>
         <form onSubmit={submit} className="auth-form">
           <label>
@@ -668,7 +668,7 @@ function AppView({ session }: { session: Session }) {
     <main className="app-shell">
       <header className="topbar">
         <div>
-          <span>Meal AI</span>
+          <span>mealwise</span>
           <strong>{session.user.email}</strong>
         </div>
         <div className="top-actions">

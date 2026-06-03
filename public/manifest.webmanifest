@@ -1,6 +1,6 @@
 {
-  "name": "Meal AI",
-  "short_name": "Meal AI",
+  "name": "mealwise",
+  "short_name": "mealwise",
   "description": "Registo de refeições por foto com calorias e nutrientes.",
   "start_url": "/",
   "display": "standalone",
