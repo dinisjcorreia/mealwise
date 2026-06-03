@@ -6,8 +6,6 @@ The app lets signed-in users log meals from photos or text, asks follow-up quest
 
 ## Screenshots
 
-<img src="docs/screenshots/dashboard-desktop.png" alt="mealwise desktop dashboard" width="720">
-
 <img src="docs/screenshots/dashboard-mobile.png" alt="mealwise mobile dashboard" width="360">
 
 ## Features
