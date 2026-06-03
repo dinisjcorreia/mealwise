@@ -125,4 +125,4 @@ npm audit --audit-level=moderate
 
 ## License
 
-No license is currently provided. Public source is visible, but reuse rights are not granted unless a license is added.
+MIT. See [LICENSE](LICENSE).
