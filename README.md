@@ -52,23 +52,13 @@ npm run dev
 
 ## Supabase Setup
 
-Create a Supabase project, then run SQL manually in the Supabase SQL Editor:
+Create a Supabase project, then run the single setup SQL manually in the Supabase SQL Editor:
 
 ```text
 supabase/schema.sql
 ```
 
-If the project already existed before water tracking was added, also run:
-
-```text
-supabase/water-intake.sql
-```
-
-For older projects created before text-only meals, run:
-
-```text
-supabase/allow-text-only-meals.sql
-```
+Use the same file for fresh projects and older projects. It creates missing objects and applies the text-only meal and water-tracking updates.
 
 The schema enables RLS and creates:
 

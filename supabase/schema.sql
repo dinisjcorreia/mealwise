@@ -30,6 +30,23 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
+alter table public.profiles
+  add column if not exists daily_water_target_ml integer;
+
+update public.profiles
+set daily_water_target_ml = round(weight_kg * 35)::integer
+where daily_water_target_ml is null;
+
+alter table public.profiles
+  alter column daily_water_target_ml set not null;
+
+alter table public.profiles
+  drop constraint if exists profiles_daily_water_target_ml_check;
+
+alter table public.profiles
+  add constraint profiles_daily_water_target_ml_check
+  check (daily_water_target_ml > 0);
+
 create table if not exists public.meals (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -42,6 +59,9 @@ create table if not exists public.meals (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.meals
+  alter column photo_path drop not null;
 
 create table if not exists public.meal_items (
   id uuid primary key default gen_random_uuid(),
