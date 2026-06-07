@@ -306,9 +306,9 @@ function DailyDashboard({
         </div>
         <i style={{ width: macroPct(water, waterTarget) }} />
         <div className="water-actions">
-          <button type="button" className="ghost" onClick={() => saveNextWater(water + 250, 250)} disabled={waterBusy}>
+          <button type="button" className="ghost" onClick={() => saveNextWater(water + 720, 720)} disabled={waterBusy}>
             <Droplets size={16} />
-            +250 ml
+            +720 ml
           </button>
           <button type="button" className="ghost" onClick={() => saveNextWater(water + 500, 500)} disabled={waterBusy}>
             <Droplets size={16} />
