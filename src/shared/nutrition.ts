@@ -36,13 +36,14 @@ export function sumItems(items: MealItem[]): Nutrients {
   };
 }
 
-export function summarizeDay(date: string, meals: Meal[], waterMl = 0): DailySummary {
+export function summarizeDay(date: string, meals: Meal[], waterMl = 0, creatineTaken = false): DailySummary {
   const savedMeals = meals.filter((meal) => meal.status === "saved");
   const items = savedMeals.flatMap((meal) => meal.meal_items ?? []);
   return {
     date,
     meal_count: savedMeals.length,
     water_ml: waterMl,
+    creatine_taken: creatineTaken,
     ...sumItems(items)
   };
 }

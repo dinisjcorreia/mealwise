@@ -61,6 +61,7 @@ describe("summarizeDay", () => {
       date: "2026-05-17",
       meal_count: 1,
       water_ml: 1250,
+      creatine_taken: false,
       calories: 520,
       protein_g: 25.2,
       carbs_g: 65.1,

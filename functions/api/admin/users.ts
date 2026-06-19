@@ -1,4 +1,4 @@
-import type { AdminUserDetails, DailyWater, Meal, MealItem, UserProfile } from "../../../src/shared/types";
+import type { AdminUserDetails, DailyCreatine, DailyWater, Meal, MealItem, UserProfile } from "../../../src/shared/types";
 import { handleError, json, requireAdmin, requireEnv, requireUser, type Env } from "../../_shared/env";
 
 type AuthUser = {
@@ -29,7 +29,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
     const url = new URL(request.url);
     const date = normalizeDate(url.searchParams.get("date") ?? "");
-    const [authUsers, profiles, mealsForDay, waterForDay, allMeals] = await Promise.all([
+    const [authUsers, profiles, mealsForDay, waterForDay, creatineForDay, allMeals] = await Promise.all([
       listAuthUsers(env),
       restFetch<UserProfile[]>(env, "/rest/v1/profiles?select=*"),
       restFetch<MealRow[]>(
@@ -37,6 +37,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
         `/rest/v1/meals?meal_date=eq.${encodeURIComponent(date)}&select=*,meal_items(*)&order=created_at.desc`
       ),
       restFetch<DailyWater[]>(env, `/rest/v1/water_intake?intake_date=eq.${encodeURIComponent(date)}&select=*`),
+      restFetch<DailyCreatine[]>(env, `/rest/v1/creatine_intake?intake_date=eq.${encodeURIComponent(date)}&select=*`),
       restFetch<MealRow[]>(env, "/rest/v1/meals?status=eq.saved&select=user_id,status")
     ]);
 
@@ -45,6 +46,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     const dayTotalsByUser = totalDayByUser(mealsForDay);
     const dayMealsByUser = groupMealsByUser(mealsForDay);
     const waterByUser = new Map(waterForDay.map((water) => [water.user_id, water.amount_ml]));
+    const creatineByUser = new Map(creatineForDay.map((creatine) => [creatine.user_id, creatine.taken]));
 
     const users: AdminUserDetails[] = authUsers.map((authUser) => {
       const dayTotals = dayTotalsByUser.get(authUser.id) ?? { calories: 0, protein_g: 0 };
@@ -58,6 +60,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
         day_calories: Math.round(dayTotals.calories),
         day_protein_g: Math.round(dayTotals.protein_g * 10) / 10,
         day_water_ml: waterByUser.get(authUser.id) ?? 0,
+        day_creatine_taken: creatineByUser.get(authUser.id) ?? false,
         day_meals: dayMealsByUser.get(authUser.id) ?? []
       };
     });

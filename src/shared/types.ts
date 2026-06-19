@@ -47,6 +47,7 @@ export type DailySummary = Nutrients & {
   date: string;
   meal_count: number;
   water_ml: number;
+  creatine_taken: boolean;
 };
 
 export type UserProfile = {
@@ -71,6 +72,14 @@ export type DailyWater = {
   updated_at?: string;
 };
 
+export type DailyCreatine = {
+  user_id: string;
+  intake_date: string;
+  taken: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type AdminUserDetails = {
   id: string;
   email: string | null;
@@ -81,5 +90,6 @@ export type AdminUserDetails = {
   day_calories: number;
   day_protein_g: number;
   day_water_ml: number;
+  day_creatine_taken: boolean;
   day_meals: Meal[];
 };

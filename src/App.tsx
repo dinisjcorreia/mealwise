@@ -9,6 +9,7 @@ import {
   Loader2,
   LogOut,
   MessageCircleQuestion,
+  Pill,
   RotateCcw,
   Send,
   Shield,
@@ -16,7 +17,7 @@ import {
   Trash2,
   Undo2
 } from "lucide-react";
-import { analyzeMeal, clarifyMeal, deleteMeal, getAdminUsers, getDay, getMeals, getProfile, reviseMeal, saveProfile, saveWater } from "./api";
+import { analyzeMeal, clarifyMeal, deleteMeal, getAdminUsers, getDay, getMeals, getProfile, reviseMeal, saveCreatine, saveProfile, saveWater } from "./api";
 import { getSupabase, supabase } from "./supabase";
 import { calculateTargets } from "./shared/targets";
 import type { AdminUserDetails, DailySummary, Gender, Meal, UserProfile, WeightGoal } from "./shared/types";
@@ -187,13 +188,15 @@ function DailyDashboard({
   date,
   profile,
   onShift,
-  onWaterChange
+  onWaterChange,
+  onCreatineChange
 }: {
   summary: DailySummary | null;
   date: string;
   profile: UserProfile | null;
   onShift: (days: number) => void;
   onWaterChange: (amountMl: number) => Promise<void>;
+  onCreatineChange: (taken: boolean) => Promise<void>;
 }) {
   const calories = summary?.calories ?? 0;
   const macroTotal = (summary?.carbs_g ?? 0) + (summary?.fat_g ?? 0);
@@ -202,10 +205,13 @@ function DailyDashboard({
   const protein = summary?.protein_g ?? 0;
   const water = summary?.water_ml ?? 0;
   const waterTarget = profile?.daily_water_target_ml ?? (profile ? Math.round(profile.weight_kg * 35) : 0);
+  const creatineTaken = summary?.creatine_taken ?? false;
   const [waterInput, setWaterInput] = useState("0");
   const [waterBusy, setWaterBusy] = useState(false);
   const [waterError, setWaterError] = useState<string | null>(null);
   const [lastQuick, setLastQuick] = useState<number | null>(null);
+  const [creatineBusy, setCreatineBusy] = useState(false);
+  const [creatineError, setCreatineError] = useState<string | null>(null);
 
   useEffect(() => {
     setWaterInput(String(water));
@@ -214,6 +220,7 @@ function DailyDashboard({
   useEffect(() => {
     setLastQuick(null);
     setWaterError(null);
+    setCreatineError(null);
   }, [date]);
 
   async function saveNextWater(amountMl: number, quickDelta: number | null) {
@@ -239,6 +246,18 @@ function DailyDashboard({
       return;
     }
     await saveNextWater(nextAmount, null);
+  }
+
+  async function toggleCreatine(nextTaken: boolean) {
+    setCreatineBusy(true);
+    setCreatineError(null);
+    try {
+      await onCreatineChange(nextTaken);
+    } catch (err) {
+      setCreatineError(err instanceof Error ? err.message : "Não foi possível guardar creatina.");
+    } finally {
+      setCreatineBusy(false);
+    }
   }
 
   return (
@@ -295,6 +314,25 @@ function DailyDashboard({
         <span>Sódio {summary?.sodium_mg ?? 0}mg</span>
       </div>
       <div className="water-panel">
+        <div className="creatine-row">
+          <div className="creatine-copy">
+            <span>Creatina</span>
+            <strong>{creatineTaken ? "Tomada neste dia" : "Por tomar"}</strong>
+          </div>
+          <label className="creatine-toggle">
+            <input
+              type="checkbox"
+              checked={creatineTaken}
+              onChange={(event) => toggleCreatine(event.target.checked)}
+              disabled={creatineBusy}
+              aria-label="Creatina tomada hoje"
+            />
+            <span>
+              {creatineBusy ? <Loader2 className="spin" size={16} /> : <Pill size={16} />}
+            </span>
+          </label>
+        </div>
+        {creatineError ? <p>{creatineError}</p> : null}
         <div className="water-heading">
           <div>
             <span>Água</span>
@@ -507,6 +545,7 @@ function AdminPanel({
               <span>
                 Água: {user.day_water_ml} / {user.profile?.daily_water_target_ml ?? 0} ml
               </span>
+              <span>Creatina: {user.day_creatine_taken ? "Tomada" : "Por tomar"}</span>
               {user.last_sign_in_at ? <span>Último login: {new Date(user.last_sign_in_at).toLocaleString("pt-PT")}</span> : null}
             </div>
             <div className="admin-meals">
@@ -649,6 +688,11 @@ function AppView({ session }: { session: Session }) {
     setSummary((current) => (current ? { ...current, water_ml: water.amount_ml } : current));
   }
 
+  async function handleCreatineChange(taken: boolean) {
+    const { creatine } = await saveCreatine(date, taken);
+    setSummary((current) => (current ? { ...current, creatine_taken: creatine.taken } : current));
+  }
+
   async function openAdmin() {
     setAdminBusy(true);
     setError(null);
@@ -691,6 +735,7 @@ function AppView({ session }: { session: Session }) {
         profile={profile}
         onShift={(days) => setDate((current) => shiftDate(current, days))}
         onWaterChange={handleWaterChange}
+        onCreatineChange={handleCreatineChange}
       />
 
       <form className="composer" onSubmit={submitMeal}>

@@ -1,5 +1,5 @@
 import { getSupabase } from "./supabase";
-import type { AdminUserDetails, DailySummary, DailyWater, Meal, UserProfile } from "./shared/types";
+import type { AdminUserDetails, DailyCreatine, DailySummary, DailyWater, Meal, UserProfile } from "./shared/types";
 
 async function authHeaders(): Promise<HeadersInit> {
   const supabase = await getSupabase();
@@ -72,6 +72,14 @@ export async function saveWater(date: string, amountMl: number): Promise<{ water
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ amount_ml: amountMl })
+  });
+}
+
+export async function saveCreatine(date: string, taken: boolean): Promise<{ creatine: DailyCreatine }> {
+  return apiFetch<{ creatine: DailyCreatine }>(`/api/creatine/${encodeURIComponent(date)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ taken })
   });
 }
 

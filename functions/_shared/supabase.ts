@@ -1,4 +1,4 @@
-import type { DailyWater, Meal, MealItem, UserProfile } from "../../src/shared/types";
+import type { DailyCreatine, DailyWater, Meal, MealItem, UserProfile } from "../../src/shared/types";
 import { requireEnv, type Env } from "./env";
 
 type MealRecord = Omit<Meal, "photo_url">;
@@ -215,6 +215,34 @@ export async function upsertWaterIntake(env: Env, userId: string, date: string, 
         user_id: userId,
         intake_date: date,
         amount_ml: amountMl,
+        updated_at: new Date().toISOString()
+      }
+    ])
+  });
+
+  return rows[0];
+}
+
+export async function getCreatineIntake(env: Env, userId: string, date: string): Promise<DailyCreatine | null> {
+  const rows = await supabaseFetch<DailyCreatine[]>(
+    env,
+    `/rest/v1/creatine_intake?user_id=eq.${encodeURIComponent(userId)}&intake_date=eq.${encodeURIComponent(date)}&select=*&limit=1`
+  );
+  return rows[0] ?? null;
+}
+
+export async function upsertCreatineIntake(env: Env, userId: string, date: string, taken: boolean): Promise<DailyCreatine> {
+  const rows = await supabaseFetch<DailyCreatine[]>(env, "/rest/v1/creatine_intake?on_conflict=user_id,intake_date", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates,return=representation"
+    },
+    body: JSON.stringify([
+      {
+        user_id: userId,
+        intake_date: date,
+        taken,
         updated_at: new Date().toISOString()
       }
     ])
