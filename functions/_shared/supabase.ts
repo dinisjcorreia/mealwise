@@ -1,5 +1,6 @@
 import type { DailyCreatine, DailyWater, Meal, MealItem, UserProfile } from "../../src/shared/types";
 import { requireEnv, type Env } from "./env";
+import { MAX_MEAL_PHOTO_BYTES, MEAL_PHOTO_TYPES } from "../../src/shared/photos";
 
 type MealRecord = Omit<Meal, "photo_url">;
 
@@ -38,6 +39,9 @@ async function supabaseFetch<T>(env: Env, path: string, init: RequestInit = {}):
 }
 
 export async function uploadMealPhoto(env: Env, userId: string, file: File): Promise<string> {
+  if (!MEAL_PHOTO_TYPES.includes(file.type) || file.size === 0 || file.size > MAX_MEAL_PHOTO_BYTES) {
+    throw new Error("A foto tem de ser JPEG, PNG ou WebP e ter no máximo 512 KB.");
+  }
   const ext = extensionFor(file.type);
   const path = `${userId}/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`;
   await supabaseFetch(env, `/storage/v1/object/meal-photos/${path}`, {
@@ -49,6 +53,15 @@ export async function uploadMealPhoto(env: Env, userId: string, file: File): Pro
     body: await file.arrayBuffer()
   });
   return path;
+}
+
+async function deleteMealPhoto(env: Env, userId: string, path: string): Promise<void> {
+  if (!path.startsWith(`${userId}/`)) throw new Error("Caminho da foto inválido.");
+  await supabaseFetch(env, "/storage/v1/object/meal-photos", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prefixes: [path] })
+  });
 }
 
 export async function downloadMealPhoto(env: Env, path: string): Promise<{ bytes: ArrayBuffer; mimeType: string }> {
@@ -98,6 +111,18 @@ export async function createMeal(env: Env, input: {
         status: "pending"
       }
     ])
+  }).catch(async (error: unknown) => {
+    if (input.photoPath) {
+      try {
+        // A lost response can hide a committed insert. Only remove an unreferenced photo.
+        const saved = await supabaseFetch<{ id: string }[]>(env,
+          `/rest/v1/meals?user_id=eq.${encodeURIComponent(input.userId)}&photo_path=eq.${encodeURIComponent(input.photoPath)}&select=id&limit=1`);
+        if (!saved.length) await deleteMealPhoto(env, input.userId, input.photoPath);
+      } catch (cleanupError) {
+        console.error("Failed to clean up unused meal photo", cleanupError);
+      }
+    }
+    throw error;
   });
 
   return withPhoto(env, { ...rows[0], meal_items: [] });
@@ -161,7 +186,13 @@ export async function addClarification(env: Env, mealId: string, question: strin
   });
 }
 
-export async function deleteMeal(env: Env, mealId: string, userId: string): Promise<void> {
+export async function deleteMeal(env: Env, mealId: string, userId: string): Promise<boolean> {
+  const filter = `id=eq.${encodeURIComponent(mealId)}&user_id=eq.${encodeURIComponent(userId)}`;
+  const rows = await supabaseFetch<{ photo_path: string | null }[]>(env,
+    `/rest/v1/meals?${filter}&select=photo_path&limit=1`);
+  if (!rows[0]) return false;
+  // Keep the meal row on storage failure so the user can retry deletion.
+  if (rows[0].photo_path) await deleteMealPhoto(env, userId, rows[0].photo_path);
   await supabaseFetch(
     env,
     `/rest/v1/meals?id=eq.${encodeURIComponent(mealId)}&user_id=eq.${encodeURIComponent(userId)}`,
@@ -172,6 +203,7 @@ export async function deleteMeal(env: Env, mealId: string, userId: string): Prom
       }
     }
   );
+  return true;
 }
 
 export async function getMeal(env: Env, mealId: string, userId: string): Promise<Meal | null> {

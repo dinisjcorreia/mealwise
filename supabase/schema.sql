@@ -242,8 +242,8 @@ values (
   'meal-photos',
   'meal-photos',
   false,
-  52428800,
-  array['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+  524288,
+  array['image/jpeg', 'image/png', 'image/webp']
 )
 on conflict (id) do update set
   public = excluded.public,
