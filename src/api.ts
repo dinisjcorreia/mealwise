@@ -1,4 +1,5 @@
 import { getSupabase } from "./supabase";
+import { prepareMealPhoto } from "./photo";
 import type { AdminUserDetails, DailyCreatine, DailySummary, DailyWater, Meal, UserProfile } from "./shared/types";
 
 async function authHeaders(): Promise<HeadersInit> {
@@ -27,7 +28,7 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export async function analyzeMeal(input: { photo: File | null; description: string; mealDate: string }): Promise<{ meal: Meal }> {
   const form = new FormData();
-  if (input.photo) form.set("photo", input.photo);
+  if (input.photo) form.set("photo", await prepareMealPhoto(input.photo));
   form.set("description", input.description);
   form.set("mealDate", input.mealDate);
 
