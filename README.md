@@ -139,14 +139,44 @@ limit does not resize existing files.
 The October 2026 restriction email names the **organization** `linktree`; its quota
 is shared across projects, including the supplied Mealwise project
 `dpcakoopjncincfucflv`. The email reports 1.42 GB against a 1.1 GB Storage quota.
-The old code allowed 50 MB photos and retained them after meal deletion. Inspect
-actual bucket totals before attributing all organization usage to this app.
+CLI inspection confirms `calorie-tracker` is the active project in that organization;
+the projects named `linktree` and `fallstack` are inactive.
+The old code allowed 50 MB photos and retained them after meal deletion.
+
+The manual audit supplied during this incident reported 717 `meal-photos` objects
+using 1,506.71 MB: 304 unused objects (657.87 MB) and 413 referenced photos
+(848.85 MB). Cleaning up the unused objects would bring live storage below the
+stated quota without changing referenced photos or meal history.
 
 Run each query in `supabase/storage-audit.sql` **separately** to see bucket sizes,
 largest files, and unused meal photos. Review unused files and remove them using
 the Storage dashboard/API. Never DELETE rows from `storage.objects` or
 `storage.buckets`: that does not remove physical files. Keep referenced meal
 photos unless you have backed them up and explicitly decided to remove them.
+
+To back up and remove unused photos, log in with `supabase login`, then run from
+this repository. The default project is `dpcakoopjncincfucflv`; set `SUPABASE_URL`
+to select another project. An existing `SUPABASE_SERVICE_ROLE_KEY` environment
+variable can be used instead of reading the selected project's key through the CLI.
+
+```bash
+npm run photos:cleanup
+# After reviewing the project and unused-photo count:
+npm run photos:cleanup -- --apply
+```
+
+The default run lists references and object metadata: no image downloads or writes.
+`--apply` selects unreferenced objects older than 24 hours, downloads their original
+bytes, records their MIME types under `.photo-backups/`, rechecks meal references,
+and removes only still-unused files through the Storage API. Referenced photos and
+meal rows are preserved. Keep those private, Git-ignored backups until verification;
+they allow restoring the original files and MIME types through Storage.
+Restoring larger originals may require manually raising the bucket limit again.
+An optional `PHOTO_BACKUP_DIR` selects another local backup directory; keep it outside
+Git. Downloads count toward Supabase egress. The authenticated live preview returned
+402 even with a server-side API key; no downloads or deletions were performed.
+While restricted, stop and use dashboard recovery, wait for the reset, or
+make a paid upgrade decision rather than repeatedly retrying a blocked API.
 
 Billing Storage usage is averaged across the cycle, so cleaning up current files
 may not immediately lift restrictions. The email gives October 21, 2026 as the

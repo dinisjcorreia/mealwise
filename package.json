@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "photos:cleanup": "node scripts/cleanup-unused-photos.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",

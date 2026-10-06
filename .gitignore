@@ -7,3 +7,5 @@ dist/
 .env.*
 !.env.example
 coverage/
+.photo-backups/
+supabase/.temp/
