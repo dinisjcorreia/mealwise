@@ -1398,6 +1398,9 @@ function AppView({ session }: { session: Session }) {
             <MessageCircleQuestion size={16} />
             Se houver dúvidas sobre a porção, perguntamos antes de contar.
           </p>
+          <p className="composer-note">
+            A descrição e a foto são analisadas pelo Gemini. Se falhar, usamos Cloudflare Workers AI.
+          </p>
         </section>
       </div>
       <footer className="app-footer">

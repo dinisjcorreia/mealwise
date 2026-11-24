@@ -6,6 +6,7 @@ export type Env = {
   GEMINI_FALLBACK_API_KEY?: string;
   GEMINI_MODEL?: string;
   GEMINI_FALLBACK_MODELS?: string;
+  AI?: Pick<Ai, "run">;
   MOCK_GEMINI?: string;
   ADMIN_EMAILS?: string;
 };
@@ -28,7 +29,7 @@ export function json(data: unknown, init: ResponseInit = {}): Response {
 
 export function requireEnv(env: Env, key: keyof Env): string {
   const value = env[key];
-  if (!value) throw new Error(`Missing ${key}`);
+  if (typeof value !== "string" || !value) throw new Error(`Missing ${key}`);
   return value;
 }
 

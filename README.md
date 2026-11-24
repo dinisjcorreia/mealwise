@@ -104,8 +104,10 @@ ADMIN_EMAILS=admin@example.com
 `GEMINI_MODEL` is attempted first. `GEMINI_FALLBACK_MODELS` lists the remaining
 models in order, and a blank value disables model fallback. The app supports up to
 six distinct models, caps each request at 20 seconds, and reserves time for later
-models within a 45-second generation budget. On billed projects, requests use
-[Gemini API pricing](https://aistudio.google.com/docs/pricing).
+models. With the Workers AI binding enabled, Gemini has up to 35 seconds and
+Cloudflare-hosted Gemma 4 has up to 20 seconds. Without the binding, Gemini has
+up to 45 seconds. Usage is subject to [Gemini API pricing](https://aistudio.google.com/docs/pricing)
+and [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/).
 
 `SUPABASE_SERVICE_ROLE_KEY` and `GEMINI_API_KEY` must stay server-side in Cloudflare. Never expose them through Vite env vars.
 
@@ -123,7 +125,9 @@ MOCK_GEMINI=true npx wrangler pages dev dist
 - Mutating API routes require a valid Supabase user session.
 - Admin API requires the signed-in email to be listed in `ADMIN_EMAILS`.
 - Meal photos are stored in a private bucket and served through short-lived signed URLs.
-- Meal photos and descriptions are sent to Gemini for nutrition analysis.
+- Meal photos, descriptions, and clarification or correction context are sent
+  to Gemini for nutrition analysis. If it cannot complete the analysis, the
+  same meal context is sent to Cloudflare Workers AI.
 
 ## Photo storage and quota recovery
 

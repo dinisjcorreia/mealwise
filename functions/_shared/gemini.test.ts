@@ -164,3 +164,41 @@ it.each([503, "timeout"])("retries after a 503 followed by %s", async failure =>
     vi.useRealTimers();
   }
 });
+
+it.each([false, true])("falls back to Workers AI with photo present = %s", async withPhoto => {
+  vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response("quota", { status: 429 })));
+  const run = vi.fn().mockResolvedValue({
+    choices: [{ finish_reason: "stop", message: { content: JSON.stringify(result) } }]
+  });
+  await expect(analyzeWithGemini({ ...env, AI: { run }, GEMINI_FALLBACK_MODELS: "other" }, {
+    description: "Ovo",
+    imageBytes: withPhoto ? new Uint8Array([1, 2]).buffer : null,
+    mimeType: "image/png"
+  })).resolves.toMatchObject({ status: "saved", items: [{ calories: 72 }] });
+  expect(run).toHaveBeenCalledOnce();
+  const [model, request, options] = run.mock.calls[0];
+  expect(model).toBe("@cf/google/gemma-4-26b-a4b-it");
+  expect(request.messages[1].content).toEqual(withPhoto ? [
+    { type: "text", text: JSON.stringify({ description: "Ovo" }) },
+    { type: "image_url", image_url: { url: "data:image/png;base64,AQI=" } }
+  ] : JSON.stringify({ description: "Ovo" }));
+  expect(options.signal).toBeInstanceOf(AbortSignal);
+});
+
+it("uses Gemini alone when it returns a valid analysis", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(response()));
+  const run = vi.fn();
+  await expect(analyzeWithGemini({ ...env, AI: { run } }, { description: "Ovo" }))
+    .resolves.toMatchObject({ status: "saved" });
+  expect(run).not.toHaveBeenCalled();
+});
+
+it("keeps both error details when Workers AI returns an invalid analysis", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(null, { status: 403 })));
+  const run = vi.fn().mockResolvedValue({
+    choices: [{ finish_reason: "stop", message: { content: "{}" } }]
+  });
+  await expect(analyzeWithGemini({ ...env, AI: { run } }, { description: "Ovo" })).rejects.toThrow(
+    "Gemini (gemini-3.5-flash-lite, HTTP 403). | Cloudflare Workers AI (@cf/google/gemma-4-26b-a4b-it): Resposta nutricional inválida."
+  );
+});

@@ -87,7 +87,7 @@ export async function analyzeWithGemini(env: Env, input: {
   }
 
   const apiKeys = [...new Set([env.GEMINI_API_KEY, env.GEMINI_FALLBACK_API_KEY].map(key => key?.trim()).filter((key): key is string => Boolean(key)))];
-  if (!apiKeys.length) requireEnv(env, "GEMINI_API_KEY");
+  if (!apiKeys.length && !env.AI) requireEnv(env, "GEMINI_API_KEY");
   const context = {
     description: input.description,
     history: input.history,
@@ -98,22 +98,18 @@ export async function analyzeWithGemini(env: Env, input: {
     }
   };
 
-  const parts: Array<Record<string, unknown>> = [];
-  if (input.imageBytes) {
-    parts.push({
-      inlineData: {
-        mimeType: input.mimeType || "image/jpeg",
-        data: arrayBufferToBase64(input.imageBytes)
-      }
-    });
-  }
-  parts.push({ text: JSON.stringify(context) });
+  const image = input.imageBytes ? {
+    mimeType: input.mimeType || "image/jpeg",
+    data: arrayBufferToBase64(input.imageBytes)
+  } : null;
+  const text = JSON.stringify(context);
+  const parts = image ? [{ inlineData: image }, { text }] : [{ text }];
 
-  const deadline = Date.now() + 45000;
+  const deadline = Date.now() + (env.AI ? 35000 : 45000);
   const models = modelCandidates(env);
   const errors = new Set<string>();
   let onlyCapacityFailures = true;
-  for (const [modelIndex, model] of models.entries()) {
+  geminiAttempts: for (const [modelIndex, model] of models.entries()) {
     // Leave time for later models even if an earlier request stalls.
     const modelDeadline = deadline - 5000 * (models.length - modelIndex - 1);
     for (const [keyIndex, apiKey] of apiKeys.entries()) {
@@ -125,11 +121,13 @@ export async function analyzeWithGemini(env: Env, input: {
         onlyCapacityFailures &&= error instanceof GeminiApiError
           ? error.status === 503
           : error instanceof Error && error.name === "TimeoutError";
-        if (error instanceof GeminiApiError && !error.retryWithNextModel &&
-            !(error.retryWithNextKey && keyIndex + 1 < apiKeys.length)) throw error;
-        // Read-only generation: try the second key on this model, then the next model.
         const detail = error instanceof Error ? redactKeys(error.message, apiKeys) : "Erro desconhecido.";
         errors.add(error instanceof GeminiApiError ? error.message : `Gemini (${model}): ${detail}`);
+        if (error instanceof GeminiApiError && !error.retryWithNextModel &&
+            !(error.retryWithNextKey && keyIndex + 1 < apiKeys.length)) {
+          if (!env.AI) throw error;
+          break geminiAttempts;
+        }
       }
     }
   }
@@ -146,7 +144,43 @@ export async function analyzeWithGemini(env: Env, input: {
       }
     }
   }
+  if (env.AI) {
+    try {
+      return await analyzeWithWorkersAI(env.AI, text, image);
+    } catch (error) {
+      const detail = error instanceof Error ? redactKeys(error.message, apiKeys) : "Erro desconhecido.";
+      errors.add(`Cloudflare Workers AI (${workersAIModel}): ${detail}`);
+    }
+  }
   throw new Error(`Não foi possível concluir a análise. ${[...errors].join(" | ")}`.trim());
+}
+
+const workersAIModel = "@cf/google/gemma-4-26b-a4b-it";
+
+async function analyzeWithWorkersAI(
+  ai: NonNullable<Env["AI"]>,
+  text: string,
+  image: { mimeType: string; data: string } | null
+): Promise<MealAnalysis> {
+  const response = await ai.run(workersAIModel, {
+    messages: [
+      { role: "system", content: `${systemInstruction}\nSchema: ${JSON.stringify(responseSchema)}` },
+      { role: "user", content: image ? [
+        { type: "text", text },
+        { type: "image_url", image_url: { url: `data:${image.mimeType};base64,${image.data}` } }
+      ] : text }
+    ],
+    response_format: { type: "json_object" },
+    chat_template_kwargs: { enable_thinking: false },
+    max_completion_tokens: 2048,
+    temperature: 0.1
+  }, { signal: AbortSignal.timeout(20000) });
+
+  const choice = response.choices?.[0];
+  if (choice?.finish_reason !== "stop" || !choice.message?.content) {
+    throw new Error("Resposta incompleta.");
+  }
+  return parseGeminiJson(choice.message.content);
 }
 
 const systemInstruction = [
