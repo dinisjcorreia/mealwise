@@ -91,7 +91,8 @@ export async function run({ url, key, apply = false, backupDir }) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
-    const url = process.env.SUPABASE_URL || "https://dpcakoopjncincfucflv.supabase.co";
+    const url = process.env.SUPABASE_URL;
+    if (!url) throw new Error("Set SUPABASE_URL explicitly to select the project to clean up");
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY || projectKey(url);
     await run({ url, key, apply: process.argv.includes("--apply"), backupDir: process.env.PHOTO_BACKUP_DIR });
   } catch (error) {

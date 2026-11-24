@@ -60,9 +60,10 @@ Create a Supabase project, then run the single setup SQL manually in the Supabas
 
 ```text
 supabase/schema.sql
+supabase/meal-analysis.sql
 ```
 
-Use the same file for fresh projects and older projects. It creates missing objects and applies the text-only meal and water-tracking updates.
+Run both files in order for fresh projects. Existing projects also need `supabase/meal-analysis.sql` before deploying this API. Use the schema file for fresh projects and older projects. It creates missing objects and applies the text-only meal and water-tracking updates.
 
 The schema enables RLS and creates:
 
@@ -94,11 +95,18 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-public-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 GEMINI_API_KEY=your-gemini-api-key
-GEMINI_MODEL=gemini-2.5-flash
-GEMINI_FALLBACK_MODELS=gemini-2.5-flash,gemini-3.1-flash-lite-preview,gemini-3-flash-preview,gemini-2.5-flash-lite
+GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_FALLBACK_MODELS=gemini-3.1-flash-lite
 MOCK_GEMINI=false
 ADMIN_EMAILS=admin@example.com
 ```
+
+`GEMINI_MODEL` is always attempted first; `GEMINI_FALLBACK_MODELS` lists only
+fallbacks (blank disables fallback). At most three distinct models are attempted,
+20 seconds each within a 45-second generation budget. A billed Gemini project
+can still charge for these models: verify your project's free tier and quotas.
+The defaults above are staged locally; existing Cloudflare values override them.
+See [project review](docs/project-review.md) for model sources, changes and limits.
 
 `SUPABASE_SERVICE_ROLE_KEY` and `GEMINI_API_KEY` must stay server-side in Cloudflare. Never expose them through Vite env vars.
 
@@ -155,14 +163,13 @@ the Storage dashboard/API. Never DELETE rows from `storage.objects` or
 photos unless you have backed them up and explicitly decided to remove them.
 
 To back up and remove unused photos, log in with `supabase login`, then run from
-this repository. The default project is `dpcakoopjncincfucflv`; set `SUPABASE_URL`
-to select another project. An existing `SUPABASE_SERVICE_ROLE_KEY` environment
+this repository. Set `SUPABASE_URL` explicitly; the script refuses to guess a project. The current app uses `zwxrpkqoomhgqdxkparw` in organization `krsdeotwjayqnstfaejf`; the incident above concerns the previous project. An existing `SUPABASE_SERVICE_ROLE_KEY` environment
 variable can be used instead of reading the selected project's key through the CLI.
 
 ```bash
-npm run photos:cleanup
+SUPABASE_URL=https://zwxrpkqoomhgqdxkparw.supabase.co npm run photos:cleanup
 # After reviewing the project and unused-photo count:
-npm run photos:cleanup -- --apply
+SUPABASE_URL=https://zwxrpkqoomhgqdxkparw.supabase.co npm run photos:cleanup -- --apply
 ```
 
 The default run lists references and object metadata: no image downloads or writes.
@@ -191,7 +198,14 @@ npm test
 npm run build
 npx tsc -p tsconfig.functions.json --noEmit
 npm audit --audit-level=moderate
+npm run test:browser # Uses the production build above and synthetic API data.
+PG_BIN=/opt/homebrew/opt/postgresql@16/bin npm run test:sql
 ```
+
+The SQL check creates and removes a disposable local database, never your live DB.
+Omit `PG_BIN` when `pg_config --bindir` points to a full PostgreSQL installation.
+The app deploy target is the existing Cloudflare Pages project `meal-ai-pwa`.
+Deployment remains a separate approval step.
 
 ## License
 

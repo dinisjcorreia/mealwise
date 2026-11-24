@@ -12,6 +12,7 @@ async function authHeaders(): Promise<HeadersInit> {
 async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
     ...init,
+    signal: init.signal ?? AbortSignal.timeout(120000),
     headers: {
       ...(await authHeaders()),
       ...(init.headers ?? {})
@@ -26,13 +27,13 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   return payload as T;
 }
 
-export async function analyzeMeal(input: { photo: File | null; description: string; mealDate: string }): Promise<{ meal: Meal }> {
+export async function analyzeMeal(input: { photo: File | null; description: string; mealDate: string }): Promise<{ meal: Meal; warning?: string }> {
   const form = new FormData();
   if (input.photo) form.set("photo", await prepareMealPhoto(input.photo));
   form.set("description", input.description);
   form.set("mealDate", input.mealDate);
 
-  return apiFetch<{ meal: Meal }>("/api/meals/analyze", {
+  return apiFetch<{ meal: Meal; warning?: string }>("/api/meals/analyze", {
     method: "POST",
     body: form
   });
@@ -64,8 +65,8 @@ export async function getMeals(date: string): Promise<{ meals: Meal[] }> {
   return apiFetch<{ meals: Meal[] }>(`/api/meals?date=${encodeURIComponent(date)}`);
 }
 
-export async function getDay(date: string): Promise<{ summary: DailySummary }> {
-  return apiFetch<{ summary: DailySummary }>(`/api/days/${encodeURIComponent(date)}`);
+export async function getDay(date: string, signal?: AbortSignal): Promise<{ meals: Meal[]; summary: DailySummary }> {
+  return apiFetch<{ meals: Meal[]; summary: DailySummary }>(`/api/days/${encodeURIComponent(date)}`, { signal });
 }
 
 export async function saveWater(date: string, amountMl: number): Promise<{ water: DailyWater }> {
@@ -92,8 +93,8 @@ export async function saveProfile(input: Omit<UserProfile, "user_id" | "created_
   });
 }
 
-export async function getProfile(): Promise<{ profile: UserProfile | null }> {
-  return apiFetch<{ profile: UserProfile | null }>("/api/profile");
+export async function getProfile(): Promise<{ profile: UserProfile | null; isAdmin: boolean }> {
+  return apiFetch<{ profile: UserProfile | null; isAdmin: boolean }>("/api/profile");
 }
 
 export async function getAdminUsers(date: string): Promise<{ date: string; users: AdminUserDetails[] }> {

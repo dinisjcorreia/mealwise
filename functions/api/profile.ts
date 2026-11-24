@@ -1,12 +1,14 @@
 import { calculateTargets } from "../../src/shared/targets";
 import type { Gender, WeightGoal, UserProfile } from "../../src/shared/types";
-import { handleError, json, requireUser, type Env } from "../_shared/env";
+import { handleError, json, requireAdmin, requireUser, type Env } from "../_shared/env";
 import { getProfile, upsertProfile } from "../_shared/supabase";
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   try {
     const user = await requireUser(request, env);
-    return json({ profile: await getProfile(env, user.id) });
+    let isAdmin = false;
+    try { requireAdmin(user, env); isAdmin = true; } catch { /* Ordinary user. */ }
+    return json({ profile: await getProfile(env, user.id), isAdmin });
   } catch (error) {
     return handleError(error);
   }
@@ -26,7 +28,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     if (!isGender(gender)) return json({ error: "Escolhe o sexo." }, { status: 400 });
     if (!isGoal(goal)) return json({ error: "Escolhe o objectivo." }, { status: 400 });
-    if (!Number.isFinite(age) || age < 13 || age > 100) return json({ error: "Idade inválida." }, { status: 400 });
+    if (!Number.isInteger(age) || age < 13 || age > 100) return json({ error: "Idade inválida." }, { status: 400 });
     if (!Number.isFinite(height) || height < 120 || height > 230) return json({ error: "Altura inválida." }, { status: 400 });
     if (!Number.isFinite(weight) || weight < 35 || weight > 300) return json({ error: "Peso inválido." }, { status: 400 });
 

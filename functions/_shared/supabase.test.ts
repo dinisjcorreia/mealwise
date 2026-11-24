@@ -64,3 +64,51 @@ describe("meal photo storage", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
+
+it("batches photo signing and avoids signing during internal meal lookup", async () => {
+  const { listMeals, getMeal } = await import("./supabase");
+  const meals = [{ id: "a", photo_path: "user/a.jpg" }, { id: "b", photo_path: "user/b.jpg" }];
+  const fetch = vi.fn().mockResolvedValueOnce(response(meals)).mockResolvedValueOnce(response([
+    { path: "user/a.jpg", signedURL: "/object/sign/meal-photos/user/a.jpg?token=x" },
+    { path: "user/b.jpg", signedURL: null }
+  ]));
+  vi.stubGlobal("fetch", fetch);
+  const result = await listMeals(env, "user", "2026-10-06");
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(fetch.mock.calls[1][1].body).paths).toEqual(["user/a.jpg", "user/b.jpg"]);
+  expect(result[0].photo_url).toContain("/storage/v1/object/sign/");
+  expect(result[1].photo_url).toBeNull();
+  fetch.mockReset().mockResolvedValueOnce(response([meals[0]]));
+  await getMeal(env, "a", "user");
+  expect(fetch).toHaveBeenCalledOnce();
+});
+
+it("saves items, notes, history and version in one RPC; propagates conflicts", async () => {
+  const { saveMealAnalysis } = await import("./supabase");
+  const meal: import("../../src/shared/types").Meal = { id: "a", updated_at: "2026-10-06T10:00:00Z", photo_path: null, meal_items: [],
+    description: null, status: "saved", meal_date: "2026-10-06", clarification_question: null, ai_notes: null, created_at: "2026-10-06T10:00:00Z" };
+  const fetch = vi.fn().mockResolvedValueOnce(response(meal)); vi.stubGlobal("fetch", fetch);
+  await saveMealAnalysis(env, meal, "user", { status: "needs_clarification", items: [], meal_name: null,
+    notes: null, clarification_question: "Quantos?" }, { question: "Porção?", answer: "Pequena" });
+  expect(fetch).toHaveBeenCalledOnce();
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ p_items: null, p_user_id: "user",
+    p_expected_updated_at: meal.updated_at, p_answer: "Pequena" });
+  fetch.mockReset().mockResolvedValueOnce(response({ message: "MEAL_CONFLICT" }, 400));
+  await expect(saveMealAnalysis(env, meal, "user", { status: "needs_clarification", items: [], meal_name: null,
+    notes: null, clarification_question: "Quantos?" })).rejects.toMatchObject({ status: 409 });
+  expect(fetch).toHaveBeenCalledOnce();
+});
+
+it("never signs/downloads another user's photo or a traversal path with the service role", async () => {
+  const { signPhoto, downloadMealPhoto, listMeals } = await import("./supabase");
+  const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+  for (const path of ["other/photo.jpg", "user/../other/photo.jpg", "user/%2e%2e/other/photo.jpg", "user//photo.jpg"]) {
+    await expect(signPhoto(env, "user", path)).resolves.toBeNull();
+    await expect(downloadMealPhoto(env, "user", path)).rejects.toThrow("inválido");
+  }
+  expect(fetch).not.toHaveBeenCalled();
+  fetch.mockResolvedValueOnce(response([{ id: "tampered", photo_path: "other/photo.jpg" }]));
+  const meals = await listMeals(env, "user", "2026-10-06");
+  expect(meals[0].photo_url).toBeNull();
+  expect(fetch).toHaveBeenCalledOnce();
+});

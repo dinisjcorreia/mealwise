@@ -4,6 +4,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 let client: SupabaseClient | null = null;
+let initializing: Promise<SupabaseClient> | null = null;
 
 function makeClient(url: string, anonKey: string): SupabaseClient {
   return createClient(url, anonKey, {
@@ -15,15 +16,20 @@ function makeClient(url: string, anonKey: string): SupabaseClient {
   });
 }
 
-export async function getSupabase(): Promise<SupabaseClient> {
-  if (client) return client;
+export function getSupabase(): Promise<SupabaseClient> {
+  if (client) return Promise.resolve(client);
+  initializing ??= initialize().catch(error => { initializing = null; throw error; });
+  return initializing;
+}
+
+async function initialize(): Promise<SupabaseClient> {
 
   if (supabaseUrl && supabaseAnonKey) {
     client = makeClient(supabaseUrl, supabaseAnonKey);
     return client;
   }
 
-  const response = await fetch("/api/config");
+  const response = await fetch("/api/config", { signal: AbortSignal.timeout(15000) });
   if (!response.ok) {
     throw new Error("Configuração Supabase em falta. Define SUPABASE_URL e SUPABASE_ANON_KEY no Cloudflare Pages.");
   }

@@ -3,15 +3,17 @@ import type { MealAnalysis, MealItem } from "./types";
 const nutrientKeys = ["calories", "protein_g", "carbs_g", "fat_g", "fiber_g", "sugar_g", "sodium_mg"] as const;
 
 function finiteNumber(value: unknown): number {
-  const numberValue = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(numberValue) && numberValue >= 0 ? numberValue : 0;
+  const numberValue = typeof value === "number" ? value :
+    typeof value === "string" && value.trim() ? Number(value) : NaN;
+  if (!Number.isFinite(numberValue) || numberValue < 0) throw new Error("Resposta nutricional inválida.");
+  return numberValue;
 }
 
 function normalizeItem(value: unknown): MealItem | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
-  const foodName = String(record.food_name ?? "").trim();
-  const portion = String(record.portion ?? "").trim();
+  const foodName = typeof record.food_name === "string" ? record.food_name.trim() : "";
+  const portion = typeof record.portion === "string" ? record.portion.trim() : "";
   if (!foodName || !portion) return null;
 
   const item: MealItem = {
@@ -38,14 +40,18 @@ function normalizeItem(value: unknown): MealItem | null {
 export function parseGeminiJson(rawText: string): MealAnalysis {
   const trimmed = rawText.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
   const parsed = JSON.parse(trimmed) as Record<string, unknown>;
-  const status = parsed.status === "needs_clarification" ? "needs_clarification" : "saved";
+  if (!parsed || Array.isArray(parsed) || !["saved", "needs_clarification"].includes(String(parsed.status)) || !Array.isArray(parsed.items)) {
+    throw new Error("Resposta nutricional inválida.");
+  }
+  const status = parsed.status;
   const items = Array.isArray(parsed.items) ? parsed.items.map(normalizeItem).filter((item): item is MealItem => Boolean(item)) : [];
+  if (items.length !== parsed.items.length) throw new Error("Resposta nutricional incompleta.");
   const clarification = typeof parsed.clarification_question === "string" ? parsed.clarification_question.trim() : "";
 
   return {
-    status: status === "needs_clarification" || items.length === 0 ? "needs_clarification" : "saved",
+    status: status === "needs_clarification" || clarification || items.length === 0 ? "needs_clarification" : "saved",
     meal_name: typeof parsed.meal_name === "string" ? parsed.meal_name : null,
-    clarification_question: clarification || (items.length === 0 ? "Que alimentos e porções devo registar nesta refeição?" : null),
+    clarification_question: clarification || (status === "needs_clarification" || items.length === 0 ? "Que alimentos e porções devo registar nesta refeição?" : null),
     items,
     notes: typeof parsed.notes === "string" ? parsed.notes : null
   };

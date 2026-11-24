@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "cf:dev": "npm run build && wrangler pages dev dist",
-    "cf:deploy": "npm run build && wrangler pages deploy dist"
+    "cf:deploy": "npm run build && wrangler pages deploy dist",
+    "test:sql": "sh scripts/test-meal-analysis.sh",
+    "test:browser": "node scripts/browser-check.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.87.1",

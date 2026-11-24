@@ -1,10 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#0e1116"/>
-  <circle cx="256" cy="240" r="132" fill="#f7f2e8"/>
-  <path d="M154 256c26 67 177 68 204 0" fill="none" stroke="#0e1116" stroke-width="34" stroke-linecap="round"/>
-  <circle cx="214" cy="206" r="22" fill="#ff6b4a"/>
-  <circle cx="288" cy="188" r="26" fill="#2eb67d"/>
-  <circle cx="318" cy="256" r="20" fill="#f4b942"/>
-  <path d="M384 126v260" stroke="#f7f2e8" stroke-width="28" stroke-linecap="round"/>
-  <path d="M114 126v260" stroke="#f7f2e8" stroke-width="28" stroke-linecap="round"/>
+  <rect width="512" height="512" fill="#244be4" />
+  <circle
+    cx="256"
+    cy="256"
+    r="154"
+    fill="none"
+    stroke="#fff"
+    stroke-width="28"
+  />
+  <circle
+    cx="256"
+    cy="256"
+    r="102"
+    fill="none"
+    stroke="#fff"
+    stroke-width="12"
+    opacity=".5"
+  />
+  <path d="M213 293c-28-41-2-102 60-110 28 46 5 105-60 110Z" fill="#fff" />
+  <path
+    d="m213 293 50-88"
+    stroke="#244be4"
+    stroke-width="10"
+    stroke-linecap="round"
+  />
 </svg>

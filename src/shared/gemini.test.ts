@@ -33,3 +33,16 @@ describe("parseGeminiJson", () => {
     expect(shouldSaveAnalysis(analysis)).toBe(false);
   });
 });
+
+it("rejects corrupted nutrition instead of silently saving zeros or dropping items", () => {
+  const item = { food_name: "Egg", portion: "1", calories: 72, protein_g: 6, carbs_g: 0,
+    fat_g: 5, fiber_g: 0, sugar_g: 0, sodium_mg: 70, confidence: 0.9 };
+  for (const calories of [null, "", -1, "bad", true]) {
+    expect(() => parseGeminiJson(JSON.stringify({ status: "saved", items: [{ ...item, calories }] }))).toThrow();
+  }
+  expect(() => parseGeminiJson(JSON.stringify({ status: "saved", items: [item, { portion: "1" }] }))).toThrow();
+  expect(() => parseGeminiJson('null')).toThrow();
+  expect(() => parseGeminiJson('{"status":"oops","items":[]}')).toThrow();
+  const clarification = parseGeminiJson('{"status":"needs_clarification","items":[]}');
+  expect(clarification.clarification_question).toBeTruthy();
+});

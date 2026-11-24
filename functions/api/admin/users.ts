@@ -1,5 +1,5 @@
 import type { AdminUserDetails, DailyCreatine, DailyWater, Meal, MealItem, UserProfile } from "../../../src/shared/types";
-import { handleError, json, requireAdmin, requireEnv, requireUser, type Env } from "../../_shared/env";
+import { handleError, json, normalizeDate, requireAdmin, requireEnv, requireUser, type Env } from "../../_shared/env";
 
 type AuthUser = {
   id: string;
@@ -31,14 +31,14 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     const date = normalizeDate(url.searchParams.get("date") ?? "");
     const [authUsers, profiles, mealsForDay, waterForDay, creatineForDay, allMeals] = await Promise.all([
       listAuthUsers(env),
-      restFetch<UserProfile[]>(env, "/rest/v1/profiles?select=*"),
-      restFetch<MealRow[]>(
+      restFetch<UserProfile>(env, "/rest/v1/profiles?select=*&order=user_id.asc"),
+      restFetch<MealRow>(
         env,
-        `/rest/v1/meals?meal_date=eq.${encodeURIComponent(date)}&select=*,meal_items(*)&order=created_at.desc`
+        `/rest/v1/meals?meal_date=eq.${encodeURIComponent(date)}&select=*,meal_items(*)&order=created_at.desc,id.desc`
       ),
-      restFetch<DailyWater[]>(env, `/rest/v1/water_intake?intake_date=eq.${encodeURIComponent(date)}&select=*`),
-      restFetch<DailyCreatine[]>(env, `/rest/v1/creatine_intake?intake_date=eq.${encodeURIComponent(date)}&select=*`),
-      restFetch<MealRow[]>(env, "/rest/v1/meals?status=eq.saved&select=user_id,status")
+      restFetch<DailyWater>(env, `/rest/v1/water_intake?intake_date=eq.${encodeURIComponent(date)}&select=*&order=user_id.asc`),
+      restFetch<DailyCreatine>(env, `/rest/v1/creatine_intake?intake_date=eq.${encodeURIComponent(date)}&select=*&order=user_id.asc`),
+      restFetch<MealRow>(env, "/rest/v1/meals?status=eq.saved&select=user_id,status&order=id.asc")
     ]);
 
     const profileByUser = new Map(profiles.map((profile) => [profile.user_id, profile]));
@@ -73,35 +73,46 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
 async function listAuthUsers(env: Env): Promise<AuthUser[]> {
   const serviceRole = requireEnv(env, "SUPABASE_SERVICE_ROLE_KEY");
-  const response = await fetch(`${requireEnv(env, "SUPABASE_URL")}/auth/v1/admin/users?per_page=1000`, {
-    headers: {
-      apikey: serviceRole,
-      Authorization: `Bearer ${serviceRole}`
+  const users: AuthUser[] = [];
+  for (let page = 1; ; page++) {
+    const response = await fetch(`${requireEnv(env, "SUPABASE_URL")}/auth/v1/admin/users?per_page=500&page=${page}`, {
+      signal: AbortSignal.timeout(15000),
+      headers: {
+        apikey: serviceRole,
+        Authorization: `Bearer ${serviceRole}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error("Não foi possível carregar utilizadores.");
     }
-  });
 
-  if (!response.ok) {
-    throw new Error("Não foi possível carregar utilizadores.");
+    const payload = (await response.json()) as { users?: AuthUser[] };
+    users.push(...(payload.users ?? []));
+    if ((payload.users?.length ?? 0) < 500) return users;
   }
-
-  const payload = (await response.json()) as { users?: AuthUser[] };
-  return payload.users ?? [];
 }
 
-async function restFetch<T>(env: Env, path: string): Promise<T> {
+async function restFetch<T>(env: Env, path: string): Promise<T[]> {
   const serviceRole = requireEnv(env, "SUPABASE_SERVICE_ROLE_KEY");
-  const response = await fetch(`${requireEnv(env, "SUPABASE_URL")}${path}`, {
-    headers: {
-      apikey: serviceRole,
-      Authorization: `Bearer ${serviceRole}`
+  const rows: T[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const response = await fetch(`${requireEnv(env, "SUPABASE_URL")}${path}&limit=500&offset=${offset}`, {
+      signal: AbortSignal.timeout(15000),
+      headers: {
+        apikey: serviceRole,
+        Authorization: `Bearer ${serviceRole}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error("Não foi possível carregar dados de administrador.");
     }
-  });
 
-  if (!response.ok) {
-    throw new Error("Não foi possível carregar dados de administrador.");
+    const page = (await response.json()) as T[];
+    rows.push(...page);
+    if (page.length < 500) return rows;
   }
-
-  return (await response.json()) as T;
 }
 
 function countByUser(meals: MealRow[]): Map<string, number> {
@@ -147,8 +158,4 @@ function groupMealsByUser(meals: MealRow[]): Map<string, Meal[]> {
     grouped.set(meal.user_id, list);
   }
   return grouped;
-}
-
-function normalizeDate(value: string): string {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : new Date().toISOString().slice(0, 10);
 }

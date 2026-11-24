@@ -1,4 +1,4 @@
-import { handleError, json, requireUser, type Env } from "../../_shared/env";
+import { handleError, json, normalizeDate, requireUser, type Env } from "../../_shared/env";
 import { upsertCreatineIntake } from "../../_shared/supabase";
 
 export const onRequestPut: PagesFunction<Env> = async ({ request, env, params }) => {
@@ -17,7 +17,3 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     return handleError(error);
   }
 };
-
-function normalizeDate(value: string): string {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : new Date().toISOString().slice(0, 10);
-}
