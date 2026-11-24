@@ -138,11 +138,14 @@ it("reports why each model failed after exhausting fallbacks", async () => {
   );
 });
 
-it("waits and retries the primary model once when every model returns 503", async () => {
+it.each([503, "timeout"])("retries after a 503 followed by %s", async failure => {
   vi.useFakeTimers();
   const fetch = vi.fn()
     .mockResolvedValueOnce(new Response("high demand", { status: 503 }))
-    .mockResolvedValueOnce(new Response("high demand", { status: 503 }))
+    .mockImplementationOnce(async () => {
+      if (failure === "timeout") throw new DOMException("timeout", "TimeoutError");
+      return new Response("high demand", { status: 503 });
+    })
     .mockResolvedValueOnce(response());
   vi.stubGlobal("fetch", fetch);
 

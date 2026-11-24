@@ -112,7 +112,7 @@ export async function analyzeWithGemini(env: Env, input: {
   const deadline = Date.now() + 45000;
   const models = modelCandidates(env);
   const errors = new Set<string>();
-  let onlyOverloaded = true;
+  let onlyCapacityFailures = true;
   for (const [modelIndex, model] of models.entries()) {
     // Leave time for later models even if an earlier request stalls.
     const modelDeadline = deadline - 5000 * (models.length - modelIndex - 1);
@@ -122,7 +122,9 @@ export async function analyzeWithGemini(env: Env, input: {
       try {
         return parseGeminiJson(await generateContent(apiKey, apiKeys, model, parts, Math.min(20000, remaining)));
       } catch (error) {
-        onlyOverloaded &&= error instanceof GeminiApiError && error.status === 503;
+        onlyCapacityFailures &&= error instanceof GeminiApiError
+          ? error.status === 503
+          : error instanceof Error && error.name === "TimeoutError";
         if (error instanceof GeminiApiError && !error.retryWithNextModel &&
             !(error.retryWithNextKey && keyIndex + 1 < apiKeys.length)) throw error;
         // Read-only generation: try the second key on this model, then the next model.
@@ -131,7 +133,7 @@ export async function analyzeWithGemini(env: Env, input: {
       }
     }
   }
-  if (onlyOverloaded && errors.size && deadline - Date.now() > 3000) {
+  if (onlyCapacityFailures && errors.size && deadline - Date.now() > 3000) {
     await new Promise<void>((resolve) => setTimeout(resolve, 1000 + Math.random() * 1000));
     const model = models[0];
     const remaining = deadline - Date.now();
