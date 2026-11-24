@@ -9,16 +9,21 @@ const response = (value = result, finishReason = "STOP") => new Response(JSON.st
   content: { parts: [{ text: "private thinking", thought: true }, { text: JSON.stringify(value) }] } }] }));
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-it("uses medium primary effort then current stable fallbacks at their lowest supported effort", async () => {
+it("can recover on the fifth model after the first four return retryable errors", async () => {
   const fetch = vi.fn().mockResolvedValueOnce(new Response("quota", { status: 429 }))
-    .mockResolvedValueOnce(new Response("unavailable", { status: 503 })).mockResolvedValueOnce(response());
+    .mockResolvedValueOnce(new Response("unavailable", { status: 503 }))
+    .mockResolvedValueOnce(new Response("unavailable", { status: 503 }))
+    .mockResolvedValueOnce(new Response("unavailable", { status: 503 }))
+    .mockResolvedValueOnce(response());
   vi.stubGlobal("fetch", fetch);
   await expect(analyzeWithGemini(env, { description: "Ovo" })).resolves.toMatchObject({ status: "saved" });
   expect(fetch.mock.calls.map(([url, init]) => [new URL(url).pathname.split("/").at(-1),
-    JSON.parse(init.body).generationConfig.thinkingConfig.thinkingLevel])).toEqual([
+    JSON.parse(init.body).generationConfig.thinkingConfig?.thinkingLevel])).toEqual([
     ["gemini-3.5-flash-lite:generateContent", "MEDIUM"],
     ["gemini-3.8-flash:generateContent", "LOW"],
-    ["gemini-3.7-flash:generateContent", "LOW"]
+    ["gemini-3.1-flash-lite:generateContent", undefined],
+    ["gemini-3.6-flash:generateContent", "LOW"],
+    ["gemini-4-hydrogen:generateContent", "LOW"]
   ]);
 });
 
@@ -80,6 +85,31 @@ it("bounds total generation time and attempts", async () => {
   vi.stubGlobal("fetch", fetch);
   await expect(analyzeWithGemini({ ...env, GEMINI_FALLBACK_API_KEY: "second-key", GEMINI_FALLBACK_MODELS: "a,b,c,d" }, { description: "Ovo" })).rejects.toThrow("concluir");
   expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it("reserves time for the sixth model when earlier attempts stall", async () => {
+  let now = 0;
+  vi.spyOn(Date, "now").mockImplementation(() => now);
+  vi.spyOn(AbortSignal, "timeout").mockImplementation(ms => {
+    now += ms;
+    return new AbortController().signal;
+  });
+  const fetch = vi.fn()
+    .mockRejectedValue(new DOMException("timeout", "TimeoutError"))
+    .mockRejectedValueOnce(new DOMException("timeout", "TimeoutError"))
+    .mockRejectedValueOnce(new DOMException("timeout", "TimeoutError"))
+    .mockRejectedValueOnce(new DOMException("timeout", "TimeoutError"))
+    .mockRejectedValueOnce(new DOMException("timeout", "TimeoutError"))
+    .mockRejectedValueOnce(new DOMException("timeout", "TimeoutError"))
+    .mockResolvedValueOnce(response());
+  vi.stubGlobal("fetch", fetch);
+
+  await expect(analyzeWithGemini({
+    ...env, GEMINI_MODEL: "primary", GEMINI_FALLBACK_API_KEY: "second-key", GEMINI_FALLBACK_MODELS: "a,b,c,d,e,f"
+  }, { description: "Ovo" })).resolves.toMatchObject({ status: "saved" });
+  expect(fetch).toHaveBeenCalledTimes(6);
+  expect(fetch.mock.calls[5][0]).toContain("/e:");
+  expect(now).toBe(45000);
 });
 
 it("reports the model and upstream message with both API keys redacted", async () => {

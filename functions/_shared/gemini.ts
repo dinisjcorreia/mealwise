@@ -113,9 +113,11 @@ export async function analyzeWithGemini(env: Env, input: {
   const models = modelCandidates(env);
   const errors = new Set<string>();
   let onlyOverloaded = true;
-  for (const model of models) {
+  for (const [modelIndex, model] of models.entries()) {
+    // Leave time for later models even if an earlier request stalls.
+    const modelDeadline = deadline - 5000 * (models.length - modelIndex - 1);
     for (const [keyIndex, apiKey] of apiKeys.entries()) {
-      const remaining = deadline - Date.now();
+      const remaining = modelDeadline - Date.now();
       if (remaining <= 0) break;
       try {
         return parseGeminiJson(await generateContent(apiKey, apiKeys, model, parts, Math.min(20000, remaining)));
@@ -175,7 +177,8 @@ async function generateContent(apiKey: string, apiKeys: string[], model: string,
       generationConfig: {
         maxOutputTokens: 4096,
         ...(model === "gemini-3.5-flash-lite" ? { thinkingConfig: { thinkingLevel: "MEDIUM" } } : {}),
-        ...(["gemini-3.8-flash", "gemini-3.7-flash"].includes(model) ? { thinkingConfig: { thinkingLevel: "LOW" } } : {}),
+        ...(["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-4-hydrogen"].includes(model)
+          ? { thinkingConfig: { thinkingLevel: "LOW" } } : {}),
         responseMimeType: "application/json",
         responseSchema
       }
@@ -203,8 +206,9 @@ async function generateContent(apiKey: string, apiKeys: string[], model: string,
 
 function modelCandidates(env: Env): string[] {
   const primary = env.GEMINI_MODEL?.trim() || "gemini-3.5-flash-lite";
-  const fallbacks = (env.GEMINI_FALLBACK_MODELS ?? "gemini-3.8-flash,gemini-3.7-flash").split(",").map(model => model.trim()).filter(Boolean);
-  return [...new Set([primary, ...fallbacks])].slice(0, 3);
+  const fallbacks = (env.GEMINI_FALLBACK_MODELS ?? "gemini-3.8-flash,gemini-3.1-flash-lite,gemini-3.6-flash,gemini-4-hydrogen")
+    .split(",").map(model => model.trim()).filter(Boolean);
+  return [...new Set([primary, ...fallbacks])].slice(0, 6);
 }
 
 class GeminiApiError extends Error {

@@ -96,17 +96,16 @@ SUPABASE_ANON_KEY=your-public-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 GEMINI_API_KEY=your-gemini-api-key
 GEMINI_MODEL=gemini-3.5-flash-lite
-GEMINI_FALLBACK_MODELS=gemini-3.1-flash-lite
+GEMINI_FALLBACK_MODELS=gemini-3.8-flash,gemini-3.1-flash-lite,gemini-3.6-flash,gemini-4-hydrogen
 MOCK_GEMINI=false
 ADMIN_EMAILS=admin@example.com
 ```
 
-`GEMINI_MODEL` is always attempted first; `GEMINI_FALLBACK_MODELS` lists only
-fallbacks (blank disables fallback). At most three distinct models are attempted,
-20 seconds each within a 45-second generation budget. A billed Gemini project
-can still charge for these models: verify your project's free tier and quotas.
-The defaults above are staged locally; existing Cloudflare values override them.
-See [project review](docs/project-review.md) for model sources, changes and limits.
+`GEMINI_MODEL` is attempted first. `GEMINI_FALLBACK_MODELS` lists the remaining
+models in order, and a blank value disables model fallback. The app supports up to
+six distinct models, caps each request at 20 seconds, and reserves time for later
+models within a 45-second generation budget. On billed projects, requests use
+[Gemini API pricing](https://aistudio.google.com/docs/pricing).
 
 `SUPABASE_SERVICE_ROLE_KEY` and `GEMINI_API_KEY` must stay server-side in Cloudflare. Never expose them through Vite env vars.
 
