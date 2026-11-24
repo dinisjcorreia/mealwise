@@ -107,3 +107,27 @@ it("reports why each model failed after exhausting fallbacks", async () => {
     "Gemini (primary, HTTP 429): Quota exceeded. | Gemini (fallback): Resposta incompleta (SAFETY)."
   );
 });
+
+it("waits and retries the primary model once when every model returns 503", async () => {
+  vi.useFakeTimers();
+  const fetch = vi.fn()
+    .mockResolvedValueOnce(new Response("high demand", { status: 503 }))
+    .mockResolvedValueOnce(new Response("high demand", { status: 503 }))
+    .mockResolvedValueOnce(response());
+  vi.stubGlobal("fetch", fetch);
+
+  try {
+    const analysis = analyzeWithGemini({
+      ...env, GEMINI_MODEL: "primary", GEMINI_FALLBACK_MODELS: "fallback"
+    }, { description: "Ovo" });
+    const check = expect(analysis).resolves.toMatchObject({ status: "saved" });
+    await vi.advanceTimersByTimeAsync(999);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1001);
+    await check;
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch.mock.calls[2][0]).toContain("/primary:");
+  } finally {
+    vi.useRealTimers();
+  }
+});

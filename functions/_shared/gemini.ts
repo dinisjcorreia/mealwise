@@ -110,17 +110,33 @@ export async function analyzeWithGemini(env: Env, input: {
   parts.push({ text: JSON.stringify(context) });
 
   const deadline = Date.now() + 45000;
+  const models = modelCandidates(env);
   const errors = new Set<string>();
-  for (const model of modelCandidates(env)) {
+  let onlyOverloaded = true;
+  for (const model of models) {
     for (const [keyIndex, apiKey] of apiKeys.entries()) {
       const remaining = deadline - Date.now();
       if (remaining <= 0) break;
       try {
         return parseGeminiJson(await generateContent(apiKey, apiKeys, model, parts, Math.min(20000, remaining)));
       } catch (error) {
+        onlyOverloaded &&= error instanceof GeminiApiError && error.status === 503;
         if (error instanceof GeminiApiError && !error.retryWithNextModel &&
             !(error.retryWithNextKey && keyIndex + 1 < apiKeys.length)) throw error;
         // Read-only generation: try the second key on this model, then the next model.
+        const detail = error instanceof Error ? redactKeys(error.message, apiKeys) : "Erro desconhecido.";
+        errors.add(error instanceof GeminiApiError ? error.message : `Gemini (${model}): ${detail}`);
+      }
+    }
+  }
+  if (onlyOverloaded && errors.size && deadline - Date.now() > 3000) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 1000 + Math.random() * 1000));
+    const model = models[0];
+    const remaining = deadline - Date.now();
+    if (remaining > 0) {
+      try {
+        return parseGeminiJson(await generateContent(apiKeys[0], apiKeys, model, parts, Math.min(20000, remaining)));
+      } catch (error) {
         const detail = error instanceof Error ? redactKeys(error.message, apiKeys) : "Erro desconhecido.";
         errors.add(error instanceof GeminiApiError ? error.message : `Gemini (${model}): ${detail}`);
       }
@@ -195,7 +211,7 @@ class GeminiApiError extends Error {
   readonly retryWithNextModel: boolean;
   readonly retryWithNextKey: boolean;
 
-  constructor(model: string, status: number, body: string, apiKeys: string[]) {
+  constructor(model: string, readonly status: number, body: string, apiKeys: string[]) {
     const message = readGeminiErrorMessage(body);
     const detail = message ? redactKeys(message, apiKeys) : "";
     super(`Gemini (${model}, HTTP ${status})${detail ? `: ${detail}` : "."}`);
